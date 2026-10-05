@@ -67,6 +67,11 @@ class ServiceMetrics(BaseModel):
 class DependencyHealth(BaseModel):
     name: str
     expected_url: str | None = None
+    configured_url: str | None = None
+    expected_reachable: bool | None = None
+    configured_reachable: bool | None = None
+    configured_error: str | None = None
+    urls_match: bool | None = None
     reachable: bool | None = None
     detail: str = ""
 

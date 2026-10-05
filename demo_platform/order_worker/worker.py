@@ -8,7 +8,7 @@ this process while the web APIs stay healthy.
 from __future__ import annotations
 
 import json
-import time
+import threading
 from datetime import UTC, datetime
 
 from demo_platform.common import config_store, paths
@@ -21,6 +21,11 @@ metrics = MetricsRegistry()
 
 QUEUE = "orders.jsonl"
 HEARTBEAT = "worker_heartbeat.json"
+_STOP = threading.Event()  # in-process mode stop signal
+
+
+def request_stop() -> None:
+    _STOP.set()
 
 
 def _queue_path():
@@ -64,8 +69,9 @@ def main() -> None:
     cfg = config_store.load(SERVICE)
     poll_s = float(cfg.get("poll_interval_ms", 500)) / 1000.0
     batch = int(cfg.get("batch_size", 5))
+    _STOP.clear()
     logger.info("worker_started", f"polling every {poll_s}s, batch={batch}")
-    while True:
+    while not _STOP.is_set():
         processed = _drain(batch)
         if processed:
             metrics.inc("processed", processed)
@@ -75,7 +81,8 @@ def main() -> None:
                 queue_depth=queue_depth(),
             )
         _write_heartbeat()
-        time.sleep(poll_s)
+        _STOP.wait(poll_s)
+    logger.info("worker_stopped", "stop requested")
 
 
 if __name__ == "__main__":

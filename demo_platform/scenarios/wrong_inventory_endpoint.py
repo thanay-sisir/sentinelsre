@@ -23,7 +23,7 @@ SCENARIO_ID = "wrong-inventory-endpoint"
 BAD_URL = "http://127.0.0.1:8099"  # dead port — nothing listens here
 
 
-def _write_ground_truth(expected_url: str) -> None:
+def _write_ground_truth(expected_url: str, injected_url: str) -> None:
     vt = paths.verifier_dir()
     vt.mkdir(parents=True, exist_ok=True)
     (vt / "ground_truth.json").write_text(
@@ -32,7 +32,7 @@ def _write_ground_truth(expected_url: str) -> None:
                 "scenario_id": SCENARIO_ID,
                 "injected_fault": "checkout-service config inventory_url -> dead port",
                 "field": "inventory_url",
-                "injected_value": BAD_URL,
+                "injected_value": injected_url,
                 "expected_value": expected_url,
                 "injected_at": datetime.now(UTC).isoformat(),
             },
@@ -42,20 +42,21 @@ def _write_ground_truth(expected_url: str) -> None:
     )
 
 
-def inject() -> dict[str, Any]:
+def inject(bad_url: str | None = None) -> dict[str, Any]:
     paths.ensure_dirs()
     config_store.seed_defaults()
     cfg = config_store.load("checkout-service")
     expected_url = cfg.get("inventory_url")
+    target_url = bad_url or BAD_URL
     # stash pristine config for reset + verifier
     vt = paths.verifier_dir()
     vt.mkdir(parents=True, exist_ok=True)
     (vt / "pristine_checkout-service.json").write_text(
         json.dumps(cfg, indent=2, sort_keys=True), encoding="utf-8"
     )
-    cfg["inventory_url"] = BAD_URL
+    cfg["inventory_url"] = target_url
     config_store.write("checkout-service", cfg)
-    _write_ground_truth(str(expected_url))
+    _write_ground_truth(str(expected_url), target_url)
     # Hot-reload if the service is already running (best effort).
     reloaded = False
     try:

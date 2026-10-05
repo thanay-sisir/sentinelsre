@@ -81,13 +81,14 @@ class PolicyEngine:
                     rules,
                 )
 
-        # 4. Rollback ops are always allowed (rollback must never be blocked).
+        # 4. Rollback ops are always allowed (rollback must never be blocked),
+        #    and never wait on human approval even in manual mode.
         if op_policy.is_rollback:
             rules.append("op.is_rollback")
             return PolicyDecision(
                 allowed=True,
                 risk_level=risk,
-                requires_approval=self._approval_mode == "manual",
+                requires_approval=False,
                 reason="rollback operation — allowed to restore prior state",
                 required_evidence_count=0,
                 rollback_required=False,

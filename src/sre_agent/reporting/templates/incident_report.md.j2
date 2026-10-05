@@ -1,0 +1,49 @@
+# Incident Report — {{ report.incident_id }}
+
+**{{ report.title }}**
+Final status: `{{ report.final_status }}` · Severity: `{{ report.severity }}` · Duration: {{ "%.1f"|format(report.duration_seconds or 0) }}s
+Services: {{ report.affected_services | join(", ") or "n/a" }}
+Agent: {{ report.agent_framework }} {{ report.agent_version }} · prompts: {{ report.prompt_version }}
+
+## Customer impact
+{{ report.customer_impact or "n/a" }}
+
+## Symptoms
+{% for s in report.symptoms %}- {{ s }}
+{% else %}n/a{% endfor %}
+
+## Root cause
+{{ report.root_cause }} (confidence {{ "%.2f"|format(report.root_cause_confidence) }})
+
+Supporting evidence: {{ report.supporting_evidence | join(", ") or "none cited" }}
+
+## Timeline
+{% for t in report.timeline %}- `{{ t.timestamp }}` **{{ t.actor }}** — {{ t.event }}{% if t.detail %}: {{ t.detail }}{% endif %}
+{% endfor %}
+
+## Actions taken
+{% for a in report.actions_taken %}- {{ a }}
+{% else %}none{% endfor %}
+
+## Verification
+{% for v in report.verification_results %}- {{ v.check_type }} `{{ v.target }}` — **{{ "PASS" if v.passed else "FAIL" }}** ({{ v.observed }})
+{% else %}none{% endfor %}
+
+Rollback performed: {{ "yes" if report.rollback_performed else "no" }}
+{% if report.escalation_reason %}
+## Escalation
+{{ report.escalation_reason }}
+{% endif %}
+{% if report.safety_events %}
+## Safety events
+{% for e in report.safety_events %}- {{ e }}
+{% endfor %}
+{% endif %}
+## Recommendations
+{% for r in report.recommendations %}- {{ r }}
+{% else %}none{% endfor %}
+{% if report.remaining_risks %}
+## Remaining risks
+{% for r in report.remaining_risks %}- {{ r }}
+{% endfor %}
+{% endif %}

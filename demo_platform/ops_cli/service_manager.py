@@ -28,7 +28,7 @@ from typing import Any
 import httpx
 import psutil
 
-from demo_platform.common import config_store, paths, registry
+from demo_platform.common import config_store, inproc, paths, registry
 from demo_platform.common.config_store import (
     ConfigStoreError,
     StaleHashError,
@@ -87,6 +87,47 @@ def _pid_alive(pid: int | None) -> bool:
         return False
 
 
+def _port_owner_pid(port: int) -> int | None:
+    """PID of the process listening on `port`, if any."""
+    try:
+        for conn in psutil.net_connections(kind="tcp"):
+            if conn.laddr and conn.laddr.port == port and conn.status == "LISTEN":
+                return conn.pid
+    except (psutil.AccessDenied, OSError):
+        return None
+    return None
+
+
+def _is_our_service_proc(pid: int) -> bool:
+    """True iff pid looks like one of our demo_platform service processes."""
+    try:
+        cmdline = " ".join(psutil.Process(pid).cmdline())
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    return "demo_platform" in cmdline
+
+
+def _reclaim_port(name: str, port: int) -> bool:
+    """Kill an orphaned demo_platform process squatting on `port`.
+
+    Orphans survive because state.json is per-runtime-dir: a previous run's
+    pid list is invisible to this runtime. Without reclaim, new spawns die
+    on bind(10048) while health checks confusingly hit the stale orphan.
+    """
+    owner = _port_owner_pid(port)
+    if owner and _is_our_service_proc(owner):
+        try:
+            proc = psutil.Process(owner)
+            proc.terminate()
+            proc.wait(timeout=5)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            with contextlib.suppress(Exception):
+                psutil.Process(owner).kill()
+        _audit("reclaim_port", name, {"port": port, "pid": owner}, True, "orphan killed")
+        return True
+    return False
+
+
 def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -114,6 +155,17 @@ def _spawn(name: str) -> dict[str, Any]:
     svc = registry.service_def(name)
     module = svc["module"].split(":")[0]
     paths.ensure_dirs()
+    if svc.get("port") and _port_open(svc["host"], int(svc["port"])) and not inproc.is_alive(name):
+        _reclaim_port(name, int(svc["port"]))
+    if inproc.inproc_enabled():
+        result = inproc.spawn(name, svc)
+        state = _load_state()
+        entry = _svc_state(state, name)
+        entry["pid"] = result["pid"]
+        entry["started_at"] = datetime.now(UTC).isoformat()
+        entry["last_state_change"] = entry["started_at"]
+        _save_state(state)
+        return result
     console_log = (paths.logs_dir() / f"{name}.console.log").open("a", encoding="utf-8")
     env = {**os.environ, "PYTHONPATH": str(paths.platform_root())}
     kwargs: dict[str, Any] = {"stdout": console_log, "stderr": subprocess.STDOUT, "env": env}
@@ -140,6 +192,12 @@ def _kill(name: str, timeout: float = 10.0) -> bool:
     state = _load_state()
     entry = _svc_state(state, name)
     pid = entry.get("pid")
+    if inproc.inproc_enabled():
+        gone = inproc.stop(name, timeout=timeout)
+        entry["pid"] = None
+        entry["last_state_change"] = datetime.now(UTC).isoformat()
+        _save_state(state)
+        return gone
     if not _pid_alive(pid):
         entry["pid"] = None
         _save_state(state)
@@ -199,7 +257,7 @@ def service_status(name: str) -> dict[str, Any]:
     state = _load_state()
     entry = _svc_state(state, name)
     pid = entry.get("pid")
-    alive = _pid_alive(pid)
+    alive = inproc.is_alive(name) if inproc.inproc_enabled() else _pid_alive(pid)
 
     readiness: bool | None = None
     detail = ""
@@ -717,6 +775,13 @@ def platform_down() -> dict[str, Any]:
     for name in registry.service_names():
         if _kill(name):
             stopped.append(name)
+    # Orphan sweep: kill demo_platform procs still squatting on our ports even
+    # if their pid was recorded under a different runtime dir's state file.
+    reg = registry.load_registry()
+    for name, svc in reg["services"].items():
+        port = svc.get("port")
+        if port and _port_open(svc["host"], int(port)):
+            _reclaim_port(name, int(port))
     _audit("platform_down", "all", {}, True, f"stopped={stopped}")
     return {"stopped": stopped}
 

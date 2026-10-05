@@ -10,7 +10,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 from demo_platform.common import paths
 
@@ -21,13 +21,12 @@ class JsonlLogger:
     def __init__(self, service: str, mirror_stdout: bool = False) -> None:
         self.service = service
         self.mirror_stdout = mirror_stdout
-        paths.ensure_dirs()
-        self._path = paths.logs_dir() / f"{service}.jsonl"
-        self._fh: TextIO = self._path.open("a", encoding="utf-8")
 
     @property
     def path(self) -> Path:
-        return self._path
+        # Resolved per call: in-process hosting can rebind the runtime dir
+        # between test modules while the module-level logger survives.
+        return paths.logs_dir() / f"{self.service}.jsonl"
 
     def log(
         self,
@@ -50,8 +49,9 @@ class JsonlLogger:
             "metadata": metadata,
         }
         line = json.dumps(record, default=str)
-        self._fh.write(line + "\n")
-        self._fh.flush()
+        paths.ensure_dirs()
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
         if self.mirror_stdout:
             print(line, file=sys.stdout, flush=True)
 
@@ -65,4 +65,4 @@ class JsonlLogger:
         self.log("ERROR", event, message, **kw)
 
     def close(self) -> None:
-        self._fh.close()
+        pass  # path is resolved per write; nothing held open

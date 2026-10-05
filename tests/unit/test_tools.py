@@ -94,7 +94,7 @@ async def test_mutating_with_token_executes():
         issued_by="auto-policy:auto_safe",
     )
     ctx = _ctx(state=state, approvals=mgr)
-    ctx.bound_token = token
+    ctx.bound_tokens = {token.operation: token}
     backend = FakeOpsBackend()
     tools = build_tools(backend, ctx, include_mutating=True)
     out = await _tool(tools.mutating, "patch_runtime_config").ainvoke(
@@ -121,7 +121,7 @@ async def test_mutating_wrong_params_blocked():
         issued_by="test",
     )
     ctx = _ctx(approvals=mgr)
-    ctx.bound_token = token
+    ctx.bound_tokens = {token.operation: token}
     backend = FakeOpsBackend()
     tools = build_tools(backend, ctx, include_mutating=True)
     # token says restart checkout; model tries a DIFFERENT service
@@ -150,7 +150,7 @@ async def test_single_use_token_blocks_second_mutation():
         issued_by="test",
     )
     ctx = _ctx(state=state, approvals=mgr)
-    ctx.bound_token = token
+    ctx.bound_tokens = {token.operation: token}
     tools = build_tools(FakeOpsBackend(), ctx, include_mutating=True)
     t = _tool(tools.mutating, "restart_service")
     await t.ainvoke({"service_name": "checkout-service"})

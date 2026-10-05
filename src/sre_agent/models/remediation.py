@@ -41,6 +41,9 @@ class RemediationPlan(BaseModel):
     target_service: str
     operation: str  # must be a known mutating op, e.g. patch_runtime_config
     normalized_parameters: dict[str, Any] = Field(default_factory=dict)
+    # Optional immediate follow-up step (e.g. reload_service after a patch).
+    post_operation: str | None = None
+    post_parameters: dict[str, Any] = Field(default_factory=dict)
     expected_result: str
     risk_level: RiskLevel = RiskLevel.MEDIUM
     requires_approval: bool = True

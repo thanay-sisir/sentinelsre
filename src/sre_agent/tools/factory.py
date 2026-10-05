@@ -45,16 +45,37 @@ log = get_logger("tools")
 
 @dataclass
 class RunContext:
-    """Per-incident shared context injected into every tool."""
+    """Per-incident shared context injected into every tool and graph node.
+
+    Carried through LangGraph's ``config["configurable"]["ctx"]`` so object
+    identity survives checkpointer serialization of the graph state.
+    """
 
     state: IncidentState
     settings: Settings
     registry: ServiceRegistry
+    backend: OpsBackend | None = None
+    models: dict[str, Any] = field(default_factory=dict)  # role -> chat model
+    policy: Any = None  # PolicyEngine
     approvals: ApprovalManager | None = None
-    bound_token: ApprovalToken | None = None
+    bound_tokens: dict[str, ApprovalToken] = field(default_factory=dict)
     audit: AuditLogger | None = None
     last_backup_id: str | None = None
     counters: dict[str, int] = field(default_factory=dict)
+
+    def tick_model_turn(self, role: str = "") -> None:
+        self.state.budgets.model_turns += 1
+        if self.state.budgets.model_turns > self.settings.sre_max_model_turns:
+            self.state.add_safety_event(
+                SafetyEvent(
+                    event_id=f"se-{int(time.time() * 1000)}",
+                    incident_id=self.state.incident_id,
+                    kind=SafetyEventKind.BUDGET_EXCEEDED,
+                    detail=f"model_turns budget exceeded ({self.settings.sre_max_model_turns})",
+                    timestamp=datetime.now(UTC),
+                )
+            )
+            raise BudgetExceededError(f"model turn budget exhausted (role={role})")
 
     def tick_tool_call(self) -> None:
         self.state.budgets.tool_calls += 1
@@ -154,9 +175,10 @@ async def _run_read(
     return out
 
 
-def _require_token(ctx: RunContext, operation: str, target: str, params: dict[str, Any]) -> None:
+def _require_token(ctx: RunContext, operation: str, target: str, params: dict[str, Any]) -> ApprovalToken:
     """Verify + consume the bound approval token for exactly this action."""
-    if ctx.bound_token is None or ctx.approvals is None:
+    token = ctx.bound_tokens.get(operation)
+    if token is None or ctx.approvals is None:
         ctx.state.add_safety_event(
             SafetyEvent(
                 event_id=f"se-{int(time.time() * 1000)}",
@@ -167,7 +189,8 @@ def _require_token(ctx: RunContext, operation: str, target: str, params: dict[st
             )
         )
         raise ApprovalRequiredError(f"{operation} on {target} requires an approved action token")
-    ctx.approvals.redeem(ctx.bound_token, operation=operation, target=target, params=params)
+    ctx.approvals.redeem(token, operation=operation, target=target, params=params)
+    return token
 
 
 async def _run_mutate(
@@ -184,7 +207,7 @@ async def _run_mutate(
         tool_name=tool_name,
         target=target,
         parameters_redacted=redact_value({**params, "target": target}),
-        approval_reference=ctx.bound_token.action_id if ctx.bound_token else None,
+        approval_reference=(tok.action_id if (tok := ctx.bound_tokens.get(operation)) else None),
         started_at=datetime.now(UTC),
     )
     t0 = time.perf_counter()

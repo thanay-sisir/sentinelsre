@@ -7,7 +7,6 @@ Marked `integration` — runs in CI but skipped with -m "not integration".
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 from demo_platform.common import paths
@@ -15,23 +14,6 @@ from demo_platform.ops_cli import service_manager as sm
 from demo_platform.scenarios import wrong_inventory_endpoint as scenario
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(scope="module")
-def platform(tmp_path_factory):
-    """Boot the whole platform in a throwaway runtime dir.
-
-    Children of pytest stay alive for the test module's duration — that is
-    exactly what we need on Windows where detached grandchildren are reaped.
-    """
-    rt = tmp_path_factory.mktemp("runtime")
-    import os
-
-    os.environ["SRE_RUNTIME_DIR"] = str(rt)
-    os.environ["SRE_PLATFORM_ROOT"] = str(Path.cwd())
-    sm.platform_up(wait_ready_s=20.0)
-    yield
-    sm.platform_down()
 
 
 def test_platform_up_all_ready(platform):

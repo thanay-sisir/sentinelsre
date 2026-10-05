@@ -1,0 +1,91 @@
+# Service registry — single source of truth shared by the local process
+# backend, the sre-ops CLI, and the Harbor task environment.
+version: 1
+
+services:
+  checkout-service:
+    kind: web
+    module: demo_platform.checkout_service.app:app
+    port: 8081
+    host: 127.0.0.1
+    health_path: /health
+    ready_path: /ready
+    metrics_path: /metrics
+    config_file: checkout-service.json
+    log_file: checkout-service.jsonl
+    # Only these config fields may ever be patched via patch_runtime_config.
+    patchable_fields:
+      - inventory_url
+      - request_timeout_ms
+    # Secret-ish keys are redacted by read_runtime_config even though none exist today.
+    secret_fields:
+      - api_key
+      - password
+      - token
+    mutating_ops:
+      - restart
+      - reload
+      - patch_config
+      - restore_config
+      - rotate_logs
+      - start
+    dependencies:
+      - inventory-service
+    description: Accepts checkout requests; depends on inventory-service.
+
+  inventory-service:
+    kind: web
+    module: demo_platform.inventory_service.app:app
+    port: 8082
+    host: 127.0.0.1
+    health_path: /health
+    ready_path: /ready
+    metrics_path: /metrics
+    config_file: inventory-service.json
+    log_file: inventory-service.jsonl
+    patchable_fields:
+      - request_timeout_ms
+    secret_fields:
+      - api_key
+      - password
+      - token
+    mutating_ops:
+      - restart
+      - reload
+      - rotate_logs
+      - start
+    dependencies: []
+    description: Returns product availability for a SKU.
+
+  order-worker:
+    kind: worker
+    module: demo_platform.order_worker.worker
+    port: null
+    host: 127.0.0.1
+    health_path: null
+    ready_path: null
+    metrics_path: null
+    config_file: order-worker.json
+    log_file: order-worker.jsonl
+    patchable_fields:
+      - poll_interval_ms
+      - batch_size
+    secret_fields:
+      - api_key
+      - password
+      - token
+    mutating_ops:
+      - restart
+      - rotate_logs
+      - start
+    dependencies: []
+    description: Background worker draining the order queue.
+
+# Synthetic end-to-end checks the verifier/agent may run.
+synthetic_checks:
+  checkout:
+    description: POST /checkout on checkout-service with a fixed SKU/qty payload.
+    service: checkout-service
+    payload:
+      sku: SKU-1001
+      qty: 1

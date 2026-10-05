@@ -1,0 +1,7 @@
+version: 1
+# structlog/local logging configuration
+level: INFO
+format: json                 # json | console (console for `demo` commands)
+audit_log_name: action_log.jsonl
+fields:
+  service: sentinelsre

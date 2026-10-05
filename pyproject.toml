@@ -1,0 +1,98 @@
+[project]
+name = "sentinelsre"
+version = "0.1.0"
+description = "SentinelSRE: sandboxed autonomous SRE incident-response agent (LangGraph + LangSmith + Harbor)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12,<4.0"
+authors = [{ name = "SentinelSRE" }]
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "langgraph>=1.0",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain-core>=1.0",
+    "langchain-xai>=1.0",
+    "langchain-openai>=1.0",
+    "langsmith>=0.4",
+    "typer>=0.15",
+    "rich>=13.9",
+    "httpx>=0.28",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "structlog>=24.4",
+    "tenacity>=9.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+eval = [
+    "harbor[langsmith]>=0.23",
+]
+
+[project.scripts]
+sentinelsre = "sre_agent.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sre_agent"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "respx>=0.22",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "coverage>=7.6",
+    "types-PyYAML>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+asyncio_mode = "auto"
+markers = [
+    "live_llm: tests that call a real LLM provider (require RUN_LIVE_LLM_TESTS=true)",
+    "integration: tests that start local demo processes",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "demo_platform", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "C4", "SIM"]
+ignore = [
+    "S101",   # assert allowed in tests
+    "S603",   # subprocess usage is audited: shell=False enforced in code
+    "B008",   # typer/fastapi style
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S104", "S105", "S106", "E501"]
+"demo_platform/**" = ["S104"]
+"src/sre_agent/models/policy.py" = ["S105"]  # TOKEN_* enum names, not secrets
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+packages = ["sre_agent"]
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["demo_platform.*", "tests.*"]
+ignore_errors = false
+follow_imports = "skip"
+
+[tool.coverage.run]
+source = ["src/sre_agent", "demo_platform"]

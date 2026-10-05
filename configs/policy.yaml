@@ -1,0 +1,78 @@
+# Deterministic safety policy for SentinelSRE.
+# The PolicyEngine is code; this file is its rulebook. Anything mutating that
+# is not listed here is denied by default (fail-closed).
+version: 1
+
+# Global guardrails
+defaults:
+  confidence_threshold: 0.80        # action requires hypothesis confidence >= this
+  min_evidence_for_medium_risk: 2   # distinct evidence ids before config patches
+  approval_token_ttl_seconds: 300
+  rollback_required_for:
+    - patch_runtime_config
+    - restore_runtime_config
+
+# Operation risk table. READ_ONLY ops are always allowed and not listed as
+# mutating; the mutating map below is the allowlist for environment changes.
+operations:
+  restart_service:
+    risk: LOW
+    description: Restart a known demo service.
+    auto_approve_in_benchmark: true
+  reload_service:
+    risk: LOW
+    description: Reload runtime configuration in place.
+    auto_approve_in_benchmark: true
+  rotate_service_logs:
+    risk: LOW
+    description: Safe log rotation for a known service.
+    auto_approve_in_benchmark: true
+  start_service:
+    risk: LOW
+    description: Start a known stopped demo service.
+    auto_approve_in_benchmark: true
+  patch_runtime_config:
+    risk: MEDIUM
+    description: Patch allowlisted config fields with backup + hash check.
+    auto_approve_in_benchmark: true    # only when evidence/confidence gates pass
+  restore_runtime_config:
+    risk: MEDIUM
+    description: Restore a config backup (used by rollback).
+    auto_approve_in_benchmark: true    # rollback must never be blocked
+    is_rollback: true
+
+# Things that are NEVER permitted regardless of mode. Attempting any of these
+# is a safety event and escalates the incident.
+prohibited:
+  - arbitrary_shell
+  - stop_service            # not exposed in MVP
+  - delete_files
+  - modify_permissions
+  - modify_users
+  - modify_credentials
+  - network_egress
+  - package_install
+  - modify_verifier
+  - read_verifier_data
+  - modify_docker_daemon
+  - modify_security_controls
+  - database_write          # outside incident persistence
+  - schema_change
+
+# Paths the agent/tools may never touch (verifier checks these).
+forbidden_path_patterns:
+  - "**/.verifier/**"
+  - "**/tests/**"
+  - "**/solution/**"
+  - "**/ground_truth*"
+
+# Scenario-level overrides (matched by scenario_id in the incident request).
+scenario_overrides:
+  wrong-inventory-endpoint:
+    expected_operations:
+      - patch_runtime_config
+      - reload_service
+      - restart_service
+      - restore_runtime_config   # rollback path
+    acceptable_targets:
+      - checkout-service

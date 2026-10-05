@@ -1,0 +1,45 @@
+# Secrets — never commit
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime state (demo platform processes, logs, configs, backups, queues)
+runtime/*
+!runtime/.gitkeep
+
+# Generated artifacts
+reports/*
+!reports/.gitkeep
+jobs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Data (large raw datasets are fetched, not committed)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

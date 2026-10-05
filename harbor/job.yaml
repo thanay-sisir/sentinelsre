@@ -1,0 +1,26 @@
+# Harbor job: SentinelSRE agent vs the wrong-inventory-endpoint task.
+# Usage:
+#   uv run python scripts/prepare_harbor_task.py
+#   uv run harbor run -c harbor/job.yaml --env-file .env
+#
+# Environment is a LangSmith cloud sandbox (no local Docker required).
+job_name: sentinelsre-baseline
+jobs_dir: ./jobs
+n_attempts: 1
+n_concurrent_trials: 1
+timeout_multiplier: 1.0
+
+environment:
+  type: langsmith
+  delete: true          # tear the sandbox down after the trial (quota saver)
+
+tasks:
+  - path: harbor/tasks/wrong-inventory-endpoint
+
+agents:
+  - import_path: sre_agent.harbor_agent:SentinelSREAgent
+    model_name: grok-4-fast
+
+artifacts:
+  - source: /opt/sentinelsre/runtime
+  - source: /opt/sentinelsre/reports

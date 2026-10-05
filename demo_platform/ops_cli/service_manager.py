@@ -259,6 +259,11 @@ def service_status(name: str) -> dict[str, Any]:
     pid = entry.get("pid")
     alive = inproc.is_alive(name) if inproc.inproc_enabled() else _pid_alive(pid)
 
+    # A web service bound to its port and answering is functionally alive even
+    # if pid bookkeeping can't see it (in-proc hosting, unmanaged orphan).
+    if not alive and svc["kind"] == "web" and svc.get("port") and _port_open(svc["host"], int(svc["port"])):
+        alive = True
+
     readiness: bool | None = None
     detail = ""
     uptime = None
@@ -271,7 +276,11 @@ def service_status(name: str) -> dict[str, Any]:
 
     if alive and svc["kind"] == "web":
         readiness = _probe_ready(svc)
-        detail = "listening" if readiness else "running but not ready"
+        pid_seen = inproc.is_alive(name) if inproc.inproc_enabled() else _pid_alive(pid)
+        if not pid_seen:
+            detail = "port bound; pid unmanaged" if readiness else "port bound; pid unmanaged; not ready"
+        else:
+            detail = "listening" if readiness else "running but not ready"
         svc_state = "RUNNING" if readiness else "UNHEALTHY"
     elif alive:
         hb = _heartbeat_fresh(name)

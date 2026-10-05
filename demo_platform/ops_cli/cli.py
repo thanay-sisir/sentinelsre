@@ -87,25 +87,25 @@ def service_reload(name: str) -> None:
 @logs_app.command("read")
 def logs_read(
     name: str,
-    limit: int = 50,
-    min_level: str | None = None,
-    query: str | None = None,
+    limit: int = typer.Option(50, "--limit"),
+    min_level: str | None = typer.Option(None, "--min-level"),
+    query: str | None = typer.Option(None, "--query"),
 ) -> None:
     _emit(sm.logs_read, name, limit, min_level, query)
 
 
 @logs_app.command("large")
-def logs_large(name: str, min_mb: float = 1.0) -> None:
+def logs_large(name: str, min_mb: float = typer.Option(1.0, "--min-mb")) -> None:
     _emit(sm.logs_large, name, min_mb)
 
 
 @logs_app.command("rotate")
-def logs_rotate(name: str, keep: int = 3) -> None:
+def logs_rotate(name: str, keep: int = typer.Option(3, "--keep")) -> None:
     _emit(sm.logs_rotate, name, keep)
 
 
 @metrics_app.command("get")
-def metrics_get(name: str, window: int = 5) -> None:
+def metrics_get(name: str, window: int = typer.Option(5, "--window")) -> None:
     _emit(sm.metrics_get, name, window)
 
 
@@ -115,7 +115,7 @@ def deps_status(name: str) -> None:
 
 
 @config_app.command("read")
-def config_read(name: str, keys: str | None = None) -> None:
+def config_read(name: str, keys: str | None = typer.Option(None, "--keys")) -> None:
     _emit(sm.config_read, name, keys.split(",") if keys else None)
 
 
@@ -161,12 +161,12 @@ def check_synthetic(name: str) -> None:
 
 
 @disk_app.command("usage")
-def disk_usage(scope: str = "runtime") -> None:
+def disk_usage(scope: str = typer.Option("runtime", "--scope")) -> None:
     _emit(sm.disk_usage, scope)
 
 
 @runbooks_app.command("search")
-def runbooks_search(query: str, limit: int = 3) -> None:
+def runbooks_search(query: str, limit: int = typer.Option(3, "--limit")) -> None:
     _emit(sm.runbooks_search, query, limit)
 
 

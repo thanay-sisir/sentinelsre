@@ -13,6 +13,7 @@ Security invariants enforced here:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -22,7 +23,6 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -396,7 +396,7 @@ def metrics_get(name: str, window_minutes: int = 5) -> dict[str, Any]:
         pass
     q = paths.queue_dir() / "orders.jsonl"
     if q.exists() and name == "checkout-service":
-        out["queue_depth"] = sum(1 for l in q.read_text(encoding="utf-8").splitlines() if l.strip())
+        out["queue_depth"] = sum(1 for line in q.read_text(encoding="utf-8").splitlines() if line.strip())
     return out
 
 
@@ -404,10 +404,8 @@ def deps_status(name: str) -> dict[str, Any]:
     svc = registry.service_def(name)
     deps = []
     cfg: dict[str, Any] = {}
-    try:
+    with contextlib.suppress(ConfigStoreError):
         cfg = config_store.load(name)
-    except ConfigStoreError:
-        pass
     for dep_name in svc.get("dependencies", []):
         dep = registry.service_def(dep_name)
         expected_url = f"http://{dep['host']}:{dep['port']}" if dep.get("port") else None

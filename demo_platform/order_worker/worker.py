@@ -41,7 +41,7 @@ def _drain(batch_size: int) -> int:
     if not p.exists():
         return 0
     lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
-    pending = [l for l in lines if l.strip()]
+    pending = [line for line in lines if line.strip()]
     take = pending[:batch_size]
     rest = pending[batch_size:]
     p.write_text("".join(rest), encoding="utf-8")

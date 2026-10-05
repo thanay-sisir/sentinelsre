@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
-
-from contextlib import asynccontextmanager
 
 import httpx
 import uvicorn

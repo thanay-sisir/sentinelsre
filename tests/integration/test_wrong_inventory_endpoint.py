@@ -10,8 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
-
-from demo_platform.common import config_store, paths
+from demo_platform.common import paths
 from demo_platform.ops_cli import service_manager as sm
 from demo_platform.scenarios import wrong_inventory_endpoint as scenario
 
@@ -93,7 +92,6 @@ def test_oracle_repair_restores_service(platform):
 
 def test_rollback_path(platform):
     """Apply a deliberately-bad patch, verify fails, restore backup, recheck."""
-    correct = "http://127.0.0.1:8082"
     h = sm.config_hash("checkout-service")["content_hash"]
     bad = sm.config_patch("checkout-service", {"inventory_url": "http://127.0.0.1:8099"}, h)
     sm.service_reload("checkout-service")
@@ -109,14 +107,14 @@ def test_rollback_path(platform):
 
 def test_policy_guards(platform):
     """Stale hash and non-allowlisted fields are rejected by config_patch."""
-    import pytest
+    from demo_platform.common.config_store import StaleHashError, UnknownFieldError
 
     h = sm.config_hash("checkout-service")["content_hash"]
-    with pytest.raises(Exception):  # StaleHashError
+    with pytest.raises(StaleHashError):
         sm.config_patch("checkout-service", {"inventory_url": "x"}, "deadbeef")
-    with pytest.raises(Exception):  # UnknownFieldError
+    with pytest.raises(UnknownFieldError):
         sm.config_patch("checkout-service", {"secret_sauce": "x"}, h)
-    with pytest.raises(Exception):  # unknown service
+    with pytest.raises(KeyError):  # unknown service
         sm.config_patch("billing-service", {"x": 1}, h)
 
 

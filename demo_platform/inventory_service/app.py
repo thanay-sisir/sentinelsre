@@ -8,9 +8,9 @@ import time
 import uvicorn
 from fastapi import FastAPI
 
+from demo_platform.common import registry
 from demo_platform.common.logging_setup import JsonlLogger
 from demo_platform.common.metrics import MetricsRegistry
-from demo_platform.common import registry
 
 INVENTORY = {
     "SKU-1001": {"sku": "SKU-1001", "name": "Mechanical keyboard", "stock": 42},

@@ -90,8 +90,8 @@ def reset() -> dict[str, Any]:
             st = sm.service_status("checkout-service")
             if st["pid"]:
                 sm.service_reload("checkout-service")
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — reload is best-effort on reset
+            print(f"reset: reload skipped: {exc}", file=sys.stderr)
     gt = vt / "ground_truth.json"
     if gt.exists():
         gt.unlink()

@@ -136,9 +136,15 @@ async def run_incident(
                         "ctx": ctx,
                     },
                     "run_name": f"incident:{request.incident_id}",
+                    "tags": [
+                        "sentinelsre",
+                        "mode:live",
+                        f"scenario:{request.scenario_id or 'none'}",
+                    ],
                     "metadata": {
                         "incident_id": request.incident_id,
                         "scenario_id": request.scenario_id,
+                        "severity": request.severity_hint.value,
                         "mode": "live",
                     },
                 },
@@ -185,6 +191,8 @@ async def resume_incident(
             config={
                 "configurable": {"thread_id": incident_id, "ctx": ctx},
                 "run_name": f"incident:{incident_id}:resume",
+                "tags": ["sentinelsre", "mode:live", "resume:approval"],
+                "metadata": {"incident_id": incident_id, "mode": "live"},
             },
         )
     st = result["incident"]

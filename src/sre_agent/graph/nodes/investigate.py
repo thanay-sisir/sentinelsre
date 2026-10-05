@@ -9,6 +9,7 @@ model only sees tool outputs, never state directly.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -31,6 +32,7 @@ async def triage(state: GraphState, config: RunnableConfig) -> GraphState:
     ctx = get_ctx(config)
     st = bind_state(ctx, state)
     move(st, IncidentStatus.TRIAGING, reason="incident intake", actor="node:triage")
+    _capture_trace_metadata(st)
     ctx.record_evidence(
         source_type=EvidenceSourceType.ALERT,
         source_name="alert",
@@ -47,6 +49,22 @@ async def triage(state: GraphState, config: RunnableConfig) -> GraphState:
     )
     ctx.audit_event("triage", incident_id=st.incident_id, severity=st.severity.value)
     return {"incident": st}
+
+
+def _capture_trace_metadata(st: Any) -> None:
+    """Store the LangSmith root run id on the incident for report linkage.
+
+    get_current_run_tree returns None when tracing is disabled — safe no-op.
+    """
+    import contextlib
+
+    with contextlib.suppress(Exception):
+        from langsmith.run_helpers import get_current_run_tree
+
+        run = get_current_run_tree()
+        if run is not None:
+            st.trace_metadata["langsmith_trace_id"] = str(run.id)
+            st.trace_metadata["langsmith_session"] = str(run.session_name)
 
 
 async def investigate(state: GraphState, config: RunnableConfig) -> GraphState:

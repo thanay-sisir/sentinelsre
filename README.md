@@ -1,5 +1,13 @@
 # SentinelSRE — Autonomous SRE Incident-Response Agent
 
+![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-83%20passing-2ea44f)
+![Ruff](https://img.shields.io/badge/lint-ruff%20clean-f7b500?logo=ruff)
+![Mypy](https://img.shields.io/badge/types-mypy%20clean-2ea44f)
+![LangGraph](https://img.shields.io/badge/orchestration-LangGraph-8957e5)
+![Model](https://img.shields.io/badge/provider-xAI%20Grok%204.3-black)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 > **Sandboxed research/demo system.** SentinelSRE operates only on a
 > deliberately broken demonstration platform. It is not connected to — and
 > must never be connected to — real production infrastructure, cloud
@@ -17,6 +25,21 @@ full incident report — all of it auditable, reproducible, and evaluable.
 **The thesis of this project**: the AI proposes; deterministic code permits.
 The model is never trusted with raw power — it gets typed tools, a policy
 gate it cannot influence, and one-time cryptographic tickets for mutations.
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="SentinelSRE architecture" width="920"/>
+</p>
+
+## Measured results (not claims — executed runs)
+
+| Metric | Result |
+|---|---|
+| Test suite | **83 passing** (unit + integration), 1 skipped (live-LLM gate) |
+| Static gates | `ruff` + `mypy` clean across 49 source files |
+| Scripted benchmark | **2/2 trials RESOLVED**, ~16 s/trial, zero API keys |
+| Live Grok 4.3 run | **RESOLVED end-to-end** — investigate → plan → policy → token-gated patch → reload → verified → report, ~90 s wall clock |
+| Safety evidence | plan denied + escalated correctly when the model cited fabricated evidence IDs; hallucinated config hash rejected by optimistic-concurrency gate |
+| Evaluation | Harbor task + independent verifier (`reward.json`), oracle solution, LangSmith run-tree correlation |
 
 ---
 

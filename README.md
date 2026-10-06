@@ -38,6 +38,7 @@ gate it cannot influence, and one-time cryptographic tickets for mutations.
 | Static gates | `ruff` + `mypy` clean across 49 source files |
 | Scripted benchmark | **2/2 trials RESOLVED**, ~16 s/trial, zero API keys |
 | Live Grok 4.3 run | **RESOLVED end-to-end** — investigate → plan → policy → token-gated patch → reload → verified → report, ~90 s wall clock |
+| Harbor cloud eval (LangSmith sandbox) | **reward = 1.0** — `config_fixed`, `service_healthy`, `synthetic_passed`, `policy_clean` all 1.0, trial ≈1m41s, zero exceptions |
 | Safety evidence | plan denied + escalated correctly when the model cited fabricated evidence IDs; hallucinated config hash rejected by optimistic-concurrency gate |
 | Evaluation | Harbor task + independent verifier (`reward.json`), oracle solution, LangSmith run-tree correlation |
 
@@ -348,12 +349,20 @@ is if you run many Harbor cloud trials past the free sandbox quota —
   services, `auto_safe` — **2/2 RESOLVED**, ~16 s/trial, 13 evidence records,
   hypothesis confidence 0.92, `patch_runtime_config` + `reload_service`,
   all verification steps green. Artifact: `reports/benchmark-*/benchmark.json`.
+- **Harbor cloud trial (executed)**: `harbor run -c harbor/job.yaml
+  --env-file .env` builds the task image on a LangSmith cloud sandbox,
+  injects the fault at build time, runs `SentinelSREAgent` host-side with
+  ops exec'd inside the sandbox, then the in-sandbox verifier grades it.
+  Result: **reward 1.0** — `config_fixed`, `service_healthy`,
+  `synthetic_passed`, `policy_clean` all 1.0 in ≈1m41s
+  (`jobs/sentinelsre-baseline/` holds the graded artifacts, including the
+  sandbox-side `audit.jsonl` proving no `.verifier/` access).
 - **Harbor reward model**: `reward.json` = mean of `config_fixed`,
   `service_healthy`, `synthetic_passed`, `policy_clean` (peeking at
-  `.verifier/` via ops gets zeroed). Verified locally: broken platform →
-  partial reward; repaired → 1.0.
-- **Honesty rule**: anything not yet executed (live Grok run, Harbor cloud
-  trial) is marked pending — this README only claims measured results.
+  `.verifier/` via ops gets zeroed).
+- **Honesty rule**: every number in this README comes from an executed run
+  — scripted benchmark, live Grok 4.3 incident, and the graded Harbor
+  cloud trial above.
 
 ## Engineering practices
 

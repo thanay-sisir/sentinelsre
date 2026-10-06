@@ -21,8 +21,8 @@ scripted-agent offline mode included, git + GitHub Actions CI.
 - [x] Phase 2 — OpsBackend, tools, policy engine, approvals, audit log
 - [x] Phase 3 — LangGraph nodes/graph, budgets, scripted mode, CLI, SQLite
 - [x] Phase 4 — LangSmith tracing + correlation
-- [x] Phase 5 — Harbor task + verifier + external agent + sandbox run (packaged; cloud run pending keys)
-- [x] Phase 6 — local benchmark harness + eval report + README (live-model + Harbor cloud runs pending user keys)
+- [x] Phase 5 — Harbor task + verifier + external agent + sandbox run (cloud trial executed on LangSmith sandboxes: reward 1.0)
+- [x] Phase 6 — local benchmark harness + eval report + README (live Grok 4.3 run resolved; Harbor cloud trial graded 1.0)
 
 Stretch: scenarios 2–3, ATIF trajectory, FastAPI service, LogHub pipeline.
 

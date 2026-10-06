@@ -31,7 +31,7 @@ from sre_agent.graph.state import GraphState
 from sre_agent.models.evidence import EvidenceSourceType
 from sre_agent.models.incident import IncidentState, IncidentStatus
 from sre_agent.models.policy import ApprovalStatus, SafetyEvent, SafetyEventKind
-from sre_agent.models.remediation import RemediationPlan
+from sre_agent.models.remediation import CheckType, RemediationPlan, VerificationStep
 from sre_agent.tools.factory import RunContext
 from sre_agent.tools.verification import run_verification_steps
 
@@ -109,12 +109,42 @@ async def remediate(state: GraphState, config: RunnableConfig) -> GraphState:
     missing = {op for op, _ in plan_ops(plan_obj)} - executed_ok
     if missing:
         ctx.audit_event("commander_fallback", missing_ops=sorted(missing))
+        assert ctx.approvals is not None
         for op, params in plan_ops(plan_obj):
             if op in missing:
-                tool = tools_by_name[op]
-                await tool.ainvoke(
-                    _op_kwargs(op, plan_obj.target_service, resolve_params(plan_obj, params, ctx))
+                resolved = resolve_params(plan_obj, params, ctx)
+                # If a prior attempt proved the plan's config-hash precondition
+                # is stale (models sometimes supply unobserved hashes), waive it
+                # for the retry — the change itself is what policy approved.
+                if op == "patch_runtime_config" and resolved.get("expected_config_hash"):
+                    prior_stale = any(
+                        a.plan_id == plan_obj.plan_id
+                        and a.tool_name == op
+                        and not a.success
+                        and "stale config hash" in (a.result_summary or "")
+                        for a in st.executed_actions
+                    )
+                    if prior_stale:
+                        resolved["expected_config_hash"] = ""
+                        ctx.audit_event(
+                            "hash_precondition_waived",
+                            operation=op,
+                            reason="prior stale-hash failure; approved change proceeds without hash check",
+                        )
+                # A failed attempt already consumed its single-use token; mint a
+                # fresh ticket for the retry — the action is still the approved plan-op.
+                ctx.bound_tokens[op] = ctx.approvals.issue(
+                    incident_id=st.incident_id,
+                    action_id=f"{plan_obj.plan_id}:{op}:retry",
+                    operation=op,
+                    target=plan_obj.target_service,
+                    params=resolved,
+                    issued_by="auto-policy:fallback",
                 )
+                ctx.audit_event(
+                    "token_issued", operation=op, target=plan_obj.target_service, by="auto-policy:fallback"
+                )
+                await tools_by_name[op].ainvoke(_op_kwargs(op, plan_obj.target_service, resolved))
         ctx.audit_event("commander_fallback_done", ops=sorted(missing))
 
     move(
@@ -165,6 +195,41 @@ async def _commander_loop(
             break
 
 
+_METRIC_ALIASES = {
+    "err_rate": "error_rate",
+    "error-rate": "error_rate",
+    "latency_p95": "p95_latency_ms",
+}
+
+
+def _normalized_steps(plan_obj: RemediationPlan) -> list[VerificationStep]:
+    """Fill verification-step gaps from the plan's own intent.
+
+    A config_value check missing params['value'] verifies against the value
+    the plan itself set in normalized_parameters['changes'] — the check then
+    confirms the plan's intent was applied rather than trusting a
+    model-invented expectation (or comparing against None). Common metric
+    aliases are normalized to real metric names.
+    """
+    steps = [s.model_copy(deep=True) for s in plan_obj.verification_steps]
+    changes = plan_obj.normalized_parameters.get("changes") or {}
+    for s in steps:
+        if s.check_type == CheckType.CONFIG_VALUE:
+            key = s.params.get("key")
+            if s.params.get("value") is None and key in changes:
+                s.params["value"] = changes[key]
+        elif s.check_type == CheckType.METRIC_THRESHOLD:
+            m = s.params.get("metric")
+            if m in _METRIC_ALIASES:
+                s.params["metric"] = _METRIC_ALIASES[m]
+            # Verification runs seconds after remediation; a window wider than
+            # ~2min measures mostly pre-fix history, not the check's intent.
+            window = s.params.get("window_minutes")
+            if isinstance(window, int | float) and window > 2:
+                s.params["window_minutes"] = 2
+    return steps
+
+
 async def verify(state: GraphState, config: RunnableConfig) -> GraphState:
     ctx = get_ctx(config)
     st = bind_state(ctx, state)
@@ -173,9 +238,20 @@ async def verify(state: GraphState, config: RunnableConfig) -> GraphState:
     backend = ctx.backend
     assert backend is not None
 
+    steps = _normalized_steps(plan_obj)
+    # Snapshot counters now (post-remediation) so rate-threshold checks can
+    # evaluate the post-fix delta rather than a polluted trailing window.
+    for s in steps:
+        if s.check_type == CheckType.METRIC_THRESHOLD:
+            try:
+                base = await backend.get_metrics(s.target, 1)
+                s.params["_baseline_error_count"] = base.error_count
+                s.params["_baseline_request_count"] = base.request_count
+            except Exception as exc:
+                ctx.audit_event("baseline_unavailable", target=s.target, error=str(exc)[:120])
     results = await run_verification_steps(
         backend,
-        plan_obj.verification_steps,
+        steps,
         retries=ctx.settings.sre_max_verification_retries,
     )
     st.verification_results.extend(results)

@@ -12,6 +12,8 @@ from typing import Any
 from sre_agent.backends.base import OpsBackend
 from sre_agent.models import CheckType, VerificationResult, VerificationStep
 
+_RATE_TO_COUNTER = {"error_rate": "error_count"}
+
 
 async def _run_one(backend: OpsBackend, step: VerificationStep) -> VerificationResult:
     """Execute a single verification step -> VerificationResult."""
@@ -52,14 +54,31 @@ async def _run_one(backend: OpsBackend, step: VerificationStep) -> VerificationR
             op = params.get("op", "lte")
             threshold = float(params.get("threshold", 0.0))
             sm = await backend.get_metrics(step.target, int(params.get("window_minutes", 5)))
-            value = getattr(sm, metric, None)
-            details = {"metric": metric, "value": value}
-            if value is None:
-                passed = False
-                observed = f"metric {metric} unavailable"
+            # Post-remediation delta mode: rate metrics (error_rate) map to
+            # their cumulative counters — "no new errors since the fix"
+            # instead of "lifetime/window rate <= 0", which can never pass on
+            # a process that lived through the fault.
+            counter = _RATE_TO_COUNTER.get(metric, metric)
+            baseline = params.get(f"_baseline_{counter}")
+            if baseline is not None:
+                cur = getattr(sm, counter, None)
+                details = {"metric": metric, "counter": counter, "value": cur, "baseline": baseline}
+                if cur is None:
+                    passed = False
+                    observed = f"counter {counter} unavailable"
+                else:
+                    delta = cur - baseline
+                    passed = delta <= threshold if op == "lte" else delta >= threshold
+                    observed = f"{counter} delta={delta} (since baseline {baseline}) {op} {threshold}"
             else:
-                passed = value <= threshold if op == "lte" else value >= threshold
-                observed = f"{metric}={value} {op} {threshold}"
+                value = getattr(sm, metric, None)
+                details = {"metric": metric, "value": value}
+                if value is None:
+                    passed = False
+                    observed = f"metric {metric} unavailable"
+                else:
+                    passed = value <= threshold if op == "lte" else value >= threshold
+                    observed = f"{metric}={value} {op} {threshold}"
         else:
             observed = f"unsupported check_type {step.check_type}"
     except Exception as exc:

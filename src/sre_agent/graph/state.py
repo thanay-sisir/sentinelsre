@@ -28,6 +28,7 @@ class GraphState(TypedDict, total=False):
     plan: RemediationPlan | None
     policy_decision: PolicyDecision | None
     approval_decision: dict[str, Any] | None  # human resume payload
+    plan_feedback: str  # policy-denial reason fed back into a re-plan
     next_node: str  # routing signal set by nodes
     error: str | None
 

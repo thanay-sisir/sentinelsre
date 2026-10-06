@@ -169,14 +169,20 @@ def _spawn(name: str) -> dict[str, Any]:
     console_log = (paths.logs_dir() / f"{name}.console.log").open("a", encoding="utf-8")
     env = {**os.environ, "PYTHONPATH": str(paths.platform_root())}
     kwargs: dict[str, Any] = {"stdout": console_log, "stderr": subprocess.STDOUT, "env": env}
+    argv = [sys.executable, "-m", module]
     if sys.platform == "win32":
+        # CREATE_NO_WINDOW keeps the child in the parent's console session —
+        # DETACHED_PROCESS children get reaped ~10s after spawn on hosts where
+        # the console/session tears them down. NEW_PROCESS_GROUP just shields
+        # the child from console ctrl events.
         kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+            subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+            | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         )
     else:
         kwargs["start_new_session"] = True
     proc = subprocess.Popen(  # noqa: S603 — fixed argv, shell=False
-        [sys.executable, "-m", module], cwd=paths.platform_root(), **kwargs
+        argv, cwd=paths.platform_root(), **kwargs
     )
     state = _load_state()
     entry = _svc_state(state, name)

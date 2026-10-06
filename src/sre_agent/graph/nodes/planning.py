@@ -32,19 +32,23 @@ from sre_agent.models.remediation import RemediationPlan
 async def plan(state: GraphState, config: RunnableConfig) -> GraphState:
     ctx = get_ctx(config)
     st = bind_state(ctx, state)
-    move(
-        st,
-        IncidentStatus.PLANNING_REMEDIATION,
-        reason="investigation produced hypotheses",
-        actor="node:plan",
-    )
+    if st.status != IncidentStatus.PLANNING_REMEDIATION:
+        move(
+            st,
+            IncidentStatus.PLANNING_REMEDIATION,
+            reason="investigation produced hypotheses",
+            actor="node:plan",
+        )
     ctx.tick_model_turn("planner")
+    briefing = investigate_briefing_for_plan(state)
+    if feedback := state.get("plan_feedback"):
+        briefing += f"\n\nPOLICY FEEDBACK ON PRIOR PLAN:\n{feedback}"
     plan_obj: RemediationPlan = await invoke_structured(
         ctx.models["planner"],
         RemediationPlan,
         [
             SystemMessage(content=load_prompt("planner")),
-            HumanMessage(content=investigate_briefing_for_plan(state)),
+            HumanMessage(content=briefing),
         ],
     )
     plan_obj.incident_id = st.incident_id
@@ -85,6 +89,24 @@ async def policy_gate(state: GraphState, config: RunnableConfig) -> GraphState:
                 timestamp=datetime.now(UTC),
             )
         )
+        # One bounded re-plan when the ONLY failure is evidence grounding —
+        # the planner gets the denial reason fed back so it can cite real
+        # evidence ids. Any other denial (forbidden op, confidence, mode)
+        # escalates immediately.
+        replans = ctx.counters.get("replans", 0)
+        if decision.reason.startswith("insufficient grounded evidence") and replans < 1:
+            ctx.counters["replans"] = replans + 1
+            ctx.audit_event("replan_requested", plan_id=plan_obj.plan_id, reason=decision.reason)
+            return {
+                "incident": st,
+                "policy_decision": decision,
+                "plan_feedback": (
+                    f"Your previous plan was denied by the policy engine: {decision.reason}. "
+                    "Re-plan and cite only evidence_id values that appear verbatim "
+                    "in the evidence digest above."
+                ),
+                "next_node": "plan",
+            }
         st.escalation_reason = f"policy denied {plan_obj.operation}: {decision.reason}"
         return {"incident": st, "policy_decision": decision, "next_node": "escalate"}
     nxt = "approve" if decision.requires_approval else "remediate"

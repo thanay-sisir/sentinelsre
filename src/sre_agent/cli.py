@@ -15,12 +15,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from uuid import uuid4
 
 import typer
 
 from sre_agent.models.incident import IncidentRequest, Severity
+
+# demo_platform lives at the repo root and is not an installed package; when
+# running via the `sentinelsre` console script the repo root is not on sys.path.
+# All demo_platform imports below are lazy (inside commands), so this is safe here.
+_REPO = Path(__file__).resolve().parents[2]
+if (_REPO / "demo_platform").is_dir():
+    sys.path.insert(0, str(_REPO))
 
 app = typer.Typer(
     name="sentinelsre",

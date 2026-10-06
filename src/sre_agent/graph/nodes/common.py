@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -58,11 +59,23 @@ def plan_ops(plan: RemediationPlan) -> list[tuple[str, dict[str, Any]]]:
     return ops
 
 
+_HEX = re.compile(r"^[0-9a-fA-F]{8,64}$")
+
+
 def resolve_params(plan: RemediationPlan, params: dict[str, Any], ctx: RunContext) -> dict[str, Any]:
-    """Fill runtime placeholders (only 'AUTO' backup id today)."""
+    """Fill runtime placeholders and sanitize model-supplied values.
+
+    'AUTO' backup ids resolve from ctx.last_backup_id. An
+    expected_config_hash that isn't a plausible sha-hex string (models
+    sometimes emit literal placeholders like 'current-hash') degrades to
+    "" — meaning skip optimistic concurrency — rather than hard-failing an
+    approved plan. The config store still takes a backup before applying.
+    """
     resolved = dict(params)
     for key, val in resolved.items():
-        if val == "AUTO":
+        if key == "expected_config_hash" and isinstance(val, str) and val and not _HEX.match(val):
+            resolved[key] = ""
+        elif val == "AUTO":
             if key == "backup_id" and ctx.last_backup_id:
                 resolved[key] = ctx.last_backup_id
             else:

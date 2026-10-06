@@ -95,7 +95,10 @@ def patch(service: str, changes: dict[str, Any], expected_hash: str) -> tuple[st
         )
     current = load(service)
     prev_hash = hashlib.sha256(json.dumps(current, sort_keys=True).encode()).hexdigest()
-    if expected_hash and expected_hash != prev_hash:
+    # Accept git-style short hashes: a supplied value that is a >=8-char prefix
+    # of the actual hash counts as a match (callers often display truncated
+    # hashes). Shorter than 8 chars or non-matching = rejected as stale.
+    if expected_hash and not (len(expected_hash) >= 8 and prev_hash.startswith(expected_hash)):
         raise StaleHashError(expected_hash, prev_hash)
     backup_id = backup(service)
     current.update(changes)

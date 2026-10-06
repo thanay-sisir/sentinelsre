@@ -11,6 +11,7 @@ its call); budget, approval, and policy errors propagate — they end the loop.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -41,6 +42,8 @@ from sre_agent.policy.approvals import ApprovalManager
 from sre_agent.policy.redaction import redact_text, redact_value
 
 log = get_logger("tools")
+
+_CONFIG_HASH = re.compile(r"^[0-9a-fA-F]{8,64}$")
 
 
 @dataclass
@@ -486,11 +489,18 @@ def build_readonly_tools(ctx: RunContext, backend: OpsBackend) -> list[BaseTool]
 
 def build_mutating_tools(ctx: RunContext, backend: OpsBackend) -> list[BaseTool]:
     async def patch_runtime_config(
-        service_name: str, changes: dict[str, Any], expected_config_hash: str
+        service_name: str, changes: dict[str, Any], expected_config_hash: str = ""
     ) -> str:
         """Patch allowlisted fields of a service's runtime config. Takes a
-        backup first and verifies expected_config_hash for optimistic
-        concurrency. Requires an approved remediation plan."""
+        backup first; if expected_config_hash is supplied it must match the
+        current config hash (optimistic concurrency) — leave it empty to
+        skip the check. Requires an approved remediation plan."""
+        # Models sometimes emit literal placeholders ('AUTO', 'current-hash')
+        # instead of a real sha. Degrade those to "" = skip the concurrency
+        # check (the store still backups before applying), matching what
+        # resolve_params() normalizes the approved plan params to.
+        if expected_config_hash and not _CONFIG_HASH.match(expected_config_hash):
+            expected_config_hash = ""
         params = {"changes": changes, "expected_config_hash": expected_config_hash}
         _require_token(ctx, "patch_runtime_config", service_name, params)
         return await _run_mutate(

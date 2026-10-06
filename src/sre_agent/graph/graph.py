@@ -62,7 +62,7 @@ def build_graph(
     g.add_conditional_edges(
         "policy_gate",
         _route,
-        {"approve": "approve", "remediate": "remediate", "escalate": "escalate"},
+        {"approve": "approve", "remediate": "remediate", "escalate": "escalate", "plan": "plan"},
     )
     g.add_conditional_edges("approve", _route, {"remediate": "remediate", "escalate": "escalate"})
     g.add_edge("remediate", "verify")

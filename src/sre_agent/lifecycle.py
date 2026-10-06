@@ -35,7 +35,14 @@ TRANSITIONS: dict[IncidentStatus, frozenset[IncidentStatus]] = {
     IncidentStatus.AWAITING_APPROVAL: frozenset(
         {IncidentStatus.REMEDIATING, IncidentStatus.ESCALATED, IncidentStatus.FAILED}
     ),
-    IncidentStatus.REMEDIATING: frozenset({IncidentStatus.VERIFYING, IncidentStatus.FAILED}),
+    IncidentStatus.REMEDIATING: frozenset(
+        {
+            IncidentStatus.VERIFYING,
+            IncidentStatus.ROLLING_BACK,
+            IncidentStatus.ESCALATED,
+            IncidentStatus.FAILED,
+        }
+    ),
     IncidentStatus.VERIFYING: frozenset(
         {
             IncidentStatus.RESOLVED,

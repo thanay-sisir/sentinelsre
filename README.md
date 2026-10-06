@@ -56,7 +56,6 @@ gate it cannot influence, and one-time cryptographic tickets for mutations.
 - [Keys and costs](#keys-and-costs)
 - [Evaluation](#evaluation)
 - [Engineering practices](#engineering-practices)
-- [Glossary — the jargon, translated](#glossary--the-jargon-translated)
 
 ---
 
@@ -380,47 +379,4 @@ is if you run many Harbor cloud trials past the free sandbox quota —
 - **Gates before commits**: pytest + ruff + mypy green at every phase;
   CI re-verifies on Ubuntu and Windows.
 
-## Glossary — the jargon, translated
 
-- **LangGraph**: a library for building agent workflows as explicit
-  state-machine graphs (nodes = steps, edges = transitions) with
-  checkpoints, interrupts, and built-in tracing.
-- **StateGraph / node / edge**: the flowchart's boxes and arrows; each node
-  is a function that reads+updates shared state.
-- **`interrupt()`**: a node call that pauses the graph mid-run (used for
-  human approval) and lets a later `Command(resume=…)` continue it.
-- **Checkpointer**: persistence for graph state between node runs — ours is
-  sqlite, so approval pauses survive process restarts.
-- **Structured output**: forcing the model to answer with a JSON document
-  matching a Pydantic schema instead of free text.
-- **OpsBackend**: our typed interface ("protocol") describing every
-  operation the agent may ever perform — swappable between local and
-  Harbor-sandbox implementations.
-- **`sre-ops`**: the controlled ops CLI — the only "keyboard" the agent can
-  touch, on any backend.
-- **Approval token**: HMAC-signed single-use ticket scoped to one exact
-  `{incident, action, op, target, params}` — the model can't mutate without
-  one, and can't reuse one.
-- **Policy engine**: deterministic code (`configs/policy.yaml`) that
-  allows/denies plans — the rulebook the AI cannot override.
-- **Evidence hashing**: dedupe by content so re-reading logs can't inflate
-  confidence.
-- **Synthetic check**: a fake "user transaction" (the `checkout` POST) used
-  as ground truth for end-to-end recovery.
-- **Verification executor**: runs a plan's declared checks as real tests —
-  RESOLVED requires all of them green.
-- **Harbor**: eval framework that builds the task's environment in a cloud
-  sandbox, runs an agent, then runs a verifier → `reward.json`.
-- **Verifier / oracle**: independent grader (checks outcomes) / reference
-  solution (proves the task is solvable).
-- **LangSmith**: LangChain's tracing/observability platform — also doubles
-  as Harbor's remote sandbox provider in our setup.
-- **YAML vs TOML vs env vs JSON**: nested-by-indentation config (pipelines,
-  registries) vs `[section]`-header config (project/task metadata) vs
-  flat secrets (`.env`) vs machine-readable data interchange.
-- **CI (GitHub Actions)**: GitHub's built-in VM-farm that runs
-  `.github/workflows/ci.yml` on every push/PR — free for public repos,
-  no API keys required.
-- **In-process hosting** (`SRE_PLATFORM_INPROCESS=1`): services as
-  `uvicorn.Server` threads inside the test process — the fix for Windows
-  job-object reaping of detached children.

@@ -44,7 +44,9 @@ def ops(*argv: str) -> dict:
 
 
 def main() -> int:
-    runtime = OPS_HOME / "runtime"
+    # Honor SRE_RUNTIME_DIR (same var the ops subprocesses get) — falls back to
+    # the sandbox layout under OPS_HOME when unset.
+    runtime = Path(os.environ.get("SRE_RUNTIME_DIR", str(OPS_HOME / "runtime")))
     gt_path = runtime / ".verifier" / "ground_truth.json"
     scores: dict[str, float] = {
         "config_fixed": 0.0,

@@ -58,6 +58,12 @@ async def test_verifier_grades_broken_then_fixed(platform, tmp_path):
     sm.service_reload("checkout-service")
     time.sleep(0.5)
 
+    # scenario.reset() removes ground_truth.json; the sandbox keeps it through
+    # grading, so recreate the minimal oracle for the fixed-state verify.
+    gt = runtime_dir / ".verifier" / "ground_truth.json"
+    gt.parent.mkdir(parents=True, exist_ok=True)
+    gt.write_text(json.dumps({"expected_value": "http://127.0.0.1:8082"}), encoding="utf-8")
+
     fixed = _run_verifier(runtime_dir, tmp_path / "fixed")
     assert fixed["config_fixed"] == 1.0
     assert fixed["service_healthy"] == 1.0

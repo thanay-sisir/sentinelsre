@@ -19,7 +19,7 @@ tasks:
 
 agents:
   - import_path: sre_agent.harbor_agent:SentinelSREAgent
-    model_name: grok-4-fast
+    model_name: grok-4.3
 
 artifacts:
   - source: /opt/sentinelsre/runtime

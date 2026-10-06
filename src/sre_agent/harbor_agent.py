@@ -14,7 +14,15 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 from typing import override
+
+# demo_platform lives at the repo root and is not an installed package; when
+# harbor imports this module the repo root is not on sys.path.
+_REPO = Path(__file__).resolve().parents[2]
+if (_REPO / "demo_platform").is_dir():
+    sys.path.insert(0, str(_REPO))
 
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment

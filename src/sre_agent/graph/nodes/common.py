@@ -80,6 +80,10 @@ def resolve_params(plan: RemediationPlan, params: dict[str, Any], ctx: RunContex
                 resolved[key] = ctx.last_backup_id
             else:
                 resolved[key] = val
+    # Token params must hash identically to the tool-call side, which drops a
+    # falsy expected_config_hash entirely — canonicalize the same way here.
+    if not resolved.get("expected_config_hash"):
+        resolved.pop("expected_config_hash", None)
     return resolved
 
 

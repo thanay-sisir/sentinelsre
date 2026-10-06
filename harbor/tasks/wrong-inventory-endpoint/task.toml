@@ -13,7 +13,6 @@ name = "SentinelSRE"
 
 [verifier]
 timeout_sec = 120.0
-collect = ["runtime/audit.jsonl", "runtime/logs"]
 
 [agent]
 timeout_sec = 600.0

@@ -501,7 +501,12 @@ def build_mutating_tools(ctx: RunContext, backend: OpsBackend) -> list[BaseTool]
         # resolve_params() normalizes the approved plan params to.
         if expected_config_hash and not _CONFIG_HASH.match(expected_config_hash):
             expected_config_hash = ""
-        params = {"changes": changes, "expected_config_hash": expected_config_hash}
+        # Keep the redeem-params dict identical to the approved plan params:
+        # a falsy hash (absent/empty/sanitized) is dropped so the key-set and
+        # therefore params_hash() match on both sides of the token binding.
+        params: dict[str, Any] = {"changes": changes}
+        if expected_config_hash:
+            params["expected_config_hash"] = expected_config_hash
         _require_token(ctx, "patch_runtime_config", service_name, params)
         return await _run_mutate(
             ctx,

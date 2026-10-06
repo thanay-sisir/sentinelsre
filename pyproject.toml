@@ -82,6 +82,7 @@ ignore = [
 "tests/integration/**" = ["ASYNC240", "ASYNC251"]  # tests drive sync platform calls
 "demo_platform/**" = ["S104"]
 "src/sre_agent/models/policy.py" = ["S105"]  # TOKEN_* enum names, not secrets
+"src/sre_agent/harbor_agent.py" = ["E402"]  # sys.path bootstrap precedes imports
 
 [tool.mypy]
 python_version = "3.12"

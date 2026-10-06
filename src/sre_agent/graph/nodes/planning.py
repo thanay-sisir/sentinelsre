@@ -120,27 +120,35 @@ async def approve(state: GraphState, config: RunnableConfig) -> GraphState:
     plan_obj = state["plan"]
     decision = state["policy_decision"]
     assert plan_obj is not None and decision is not None
-    move(
-        st,
-        IncidentStatus.AWAITING_APPROVAL,
-        reason="policy requires human approval",
-        actor="node:approve",
-    )
+    # LangGraph replays the whole node on interrupt() resume — guard each side
+    # effect so re-entry is idempotent (self-transitions/duplicates are illegal).
+    if st.status != IncidentStatus.AWAITING_APPROVAL:
+        move(
+            st,
+            IncidentStatus.AWAITING_APPROVAL,
+            reason="policy requires human approval",
+            actor="node:approve",
+        )
+    existing_ids = {r.action_id for r in st.approval_requests if r.plan_id == plan_obj.plan_id}
     for op, params in plan_ops(plan_obj):
+        action_id = f"{plan_obj.plan_id}:{op}"
+        if action_id in existing_ids:
+            continue
         record_approval_request(
             st,
             plan_obj,
-            action_id=f"{plan_obj.plan_id}:{op}",
+            action_id=action_id,
             operation=op,
             target=plan_obj.target_service,
             params=params,
             status=ApprovalStatus.PENDING,
         )
-    ctx.audit_event(
-        "approval_requested",
-        plan_id=plan_obj.plan_id,
-        ops=[op for op, _ in plan_ops(plan_obj)],
-    )
+    if not existing_ids:
+        ctx.audit_event(
+            "approval_requested",
+            plan_id=plan_obj.plan_id,
+            ops=[op for op, _ in plan_ops(plan_obj)],
+        )
 
     payload = {
         "type": "approval_required",

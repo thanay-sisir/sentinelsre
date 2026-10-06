@@ -89,7 +89,7 @@ async def test_mutating_with_token_executes():
         target="checkout-service",
         params={
             "changes": {"inventory_url": "http://127.0.0.1:8082"},
-            "expected_config_hash": "",  # fake backend skips when falsy
+            # canonical "no hash" form: key absent (resolve_params drops falsy)
         },
         issued_by="auto-policy:auto_safe",
     )
